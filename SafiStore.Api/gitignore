@@ -1,0 +1,18 @@
+# ملفات التشغيل والنتائج
+[Bb]in/
+[Oo]bj/
+
+# ملفات الإعدادات الحساسة (عشان كلمات السر)
+appsettings.Development.json
+appsettings.json
+
+# ملفات Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ملفات النظام
+.DS_Store
+Thumbs.db

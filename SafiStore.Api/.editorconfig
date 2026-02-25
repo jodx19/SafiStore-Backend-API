@@ -1,0 +1,109 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+dotnet_style_operator_placement_when_wrapping = beginning_of_line
+tab_width = 4
+csharp_indent_labels = one_less_than_current
+csharp_using_directive_placement = outside_namespace:silent
+csharp_prefer_simple_using_statement = true:suggestion
+csharp_prefer_braces = true:silent
+csharp_style_namespace_declarations = block_scoped:silent
+csharp_style_prefer_method_group_conversion = true:silent
+csharp_style_prefer_top_level_statements = true:silent
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_prefer_system_threading_lock = true:suggestion
+csharp_style_expression_bodied_methods = false:silent
+csharp_style_expression_bodied_constructors = false:silent
+
+[*.{cs,csx}]
+# Basic C# code style
+dotnet_sort_system_directives_first = true
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+
+csharp_new_line_before_open_brace = all
+csharp_new_line_between_query_expression_clauses = true
+
+# Naming styles
+# PascalCase style
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
+# _camelCase style (for private fields)
+dotnet_naming_style.underscore_camel_style.capitalization = camel_case
+dotnet_naming_style.underscore_camel_style.required_prefix = _
+
+# Symbols
+dotnet_naming_symbols.all_types.applicable_kinds = class, struct, enum, delegate, interface
+dotnet_naming_symbols.all_types.applicable_accessibilities = *
+
+dotnet_naming_symbols.methods.applicable_kinds = method
+dotnet_naming_symbols.methods.applicable_accessibilities = *
+
+dotnet_naming_symbols.properties.applicable_kinds = property
+dotnet_naming_symbols.properties.applicable_accessibilities = *
+
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.applicable_accessibilities = *
+dotnet_naming_symbols.constants.required_modifiers = const
+
+dotnet_naming_symbols.enum_members.applicable_kinds = field
+dotnet_naming_symbols.enum_members.applicable_accessibilities = *
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+# Rules
+dotnet_naming_rule.types_should_be_pascal.symbols = all_types
+dotnet_naming_rule.types_should_be_pascal.style = pascal_case_style
+dotnet_naming_rule.types_should_be_pascal.severity = warning
+
+dotnet_naming_rule.methods_should_be_pascal.symbols = methods
+dotnet_naming_rule.methods_should_be_pascal.style = pascal_case_style
+dotnet_naming_rule.methods_should_be_pascal.severity = warning
+
+dotnet_naming_rule.properties_should_be_pascal.symbols = properties
+dotnet_naming_rule.properties_should_be_pascal.style = pascal_case_style
+dotnet_naming_rule.properties_should_be_pascal.severity = warning
+
+dotnet_naming_rule.constants_should_be_pascal.symbols = constants
+dotnet_naming_rule.constants_should_be_pascal.style = pascal_case_style
+dotnet_naming_rule.constants_should_be_pascal.severity = warning
+
+dotnet_naming_rule.enum_members_should_be_pascal.symbols = enum_members
+dotnet_naming_rule.enum_members_should_be_pascal.style = pascal_case_style
+dotnet_naming_rule.enum_members_should_be_pascal.severity = warning
+
+dotnet_naming_rule.private_fields_should_be_underscore_camel.symbols = private_fields
+dotnet_naming_rule.private_fields_should_be_underscore_camel.style = underscore_camel_style
+dotnet_naming_rule.private_fields_should_be_underscore_camel.severity = suggestion
+
+# File header (optional)
+# file_header_template = Copyright (c) Company. All rights reserved.
+
+# ── Diagnostic Severity Rules ──────────────────────────────────────────────
+[*.cs]
+
+# Nullable reference type warnings: keep as warning (not error) until all DTOs are annotated
+dotnet_diagnostic.CS8618.severity = warning   # Non-nullable field uninitialized
+dotnet_diagnostic.CS8601.severity = warning   # Possible null reference assignment
+dotnet_diagnostic.CS8602.severity = warning   # Dereference of possibly null reference
+dotnet_diagnostic.CS8603.severity = warning   # Possible null reference return
+
+# Code quality: flag unused code
+dotnet_diagnostic.IDE0005.severity = warning  # Using directive is unnecessary
+dotnet_diagnostic.CS0168.severity = warning   # Variable is declared but never used
+dotnet_diagnostic.CS0219.severity = warning   # Variable is assigned but its value is never used
+dotnet_diagnostic.IDE0051.severity = warning  # Private member unused
+dotnet_diagnostic.IDE0052.severity = warning  # Private member can be removed
+
+# Style preferences
+dotnet_diagnostic.IDE0062.severity = suggestion  # Make local function static
+dotnet_diagnostic.IDE0028.severity = suggestion  # Use collection initializer

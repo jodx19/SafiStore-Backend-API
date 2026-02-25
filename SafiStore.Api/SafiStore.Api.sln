@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36603.0 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SafiStore.Api", "SafiStore.Api.csproj", "{DEBB55DD-4C6D-4E21-9545-92BF828A5438}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DEBB55DD-4C6D-4E21-9545-92BF828A5438}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DEBB55DD-4C6D-4E21-9545-92BF828A5438}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DEBB55DD-4C6D-4E21-9545-92BF828A5438}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DEBB55DD-4C6D-4E21-9545-92BF828A5438}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B34D1391-07A0-437A-8841-251D9B170CF1}
+	EndGlobalSection
+EndGlobal

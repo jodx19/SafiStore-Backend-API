@@ -1,0 +1,13 @@
+bin/
+obj/
+.vscode/
+.env
+.env.local
+*.db
+logs/
+**/node_modules
+**/.next
+.git
+*.md
+*.user
+.idea/

@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.cache
+*.log
+
+# build artifacts
+.build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# secrets
+.env
+**/appsettings.Production.json
