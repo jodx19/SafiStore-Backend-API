@@ -28,22 +28,8 @@ builder.Services.AddControllers(opts =>
 #endregion
 
 #region Database
-var defaultConnection = configuration.GetConnectionString("DefaultConnection");
-
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-{
-    if (!string.IsNullOrWhiteSpace(defaultConnection) && defaultConnection.Contains("Host="))
-    {
-        options.UseNpgsql(defaultConnection);
-    }
-    else
-    {
-        options.UseSqlServer(defaultConnection, sqlOptions =>
-        {
-            sqlOptions.EnableRetryOnFailure();
-        });
-    }
-});
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 #endregion
 
 #region Application Services
