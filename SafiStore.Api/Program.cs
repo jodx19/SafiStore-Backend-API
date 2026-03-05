@@ -29,7 +29,7 @@ builder.Services.AddControllers(opts =>
 
 #region Database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 #endregion
 
 #region Application Services
@@ -44,6 +44,13 @@ builder.Services.AddScoped<IReviewService, ReviewService>();
 
 #region Health Checks
 builder.Services.AddHealthChecks();
+#endregion
+
+#region Performance
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
 #endregion
 
 #region CORS
@@ -61,8 +68,12 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowAnyMethod();
+
+        if (!allowedOrigins.Contains("*"))
+        {
+            policy.AllowCredentials();
+        }
     });
 });
 #endregion
@@ -173,6 +184,11 @@ if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
+else
+{
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
+}
 
 // 1) Global error handling (first middleware — catches everything below)
 app.UseMiddleware<ErrorHandlingMiddleware>();
@@ -180,6 +196,7 @@ app.UseMiddleware<ErrorHandlingMiddleware>();
 
 // 2️⃣ Infrastructure & Security
 app.UseHttpsRedirection();
+app.UseResponseCompression();
 app.UseCors("DefaultCorsPolicy");
 app.UseMiddleware<SecurityHeadersMiddleware>();
 
@@ -203,6 +220,7 @@ if (app.Environment.IsDevelopment())
         options.RoutePrefix = "swagger";
     });
 }
+
 
 // Endpoints
 app.MapHealthChecks("/health");
