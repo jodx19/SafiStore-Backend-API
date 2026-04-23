@@ -46,4 +46,63 @@ namespace SafiStore.Api.Application.DTOs
         public string Message { get; set; } = "User registered successfully";
     }
 
+    public class ForgotPasswordDto
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class ResetPasswordDto
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        public string Token { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(100, MinimumLength = 8)]
+        [DataType(DataType.Password)]
+        public string NewPassword { get; set; } = string.Empty;
+
+        [Required]
+        [Compare("NewPassword", ErrorMessage = "Passwords do not match")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    public class ChangePasswordDto
+    {
+        [Required]
+        [DataType(DataType.Password)]
+        public string CurrentPassword { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(100, MinimumLength = 8)]
+        [DataType(DataType.Password)]
+        public string NewPassword { get; set; } = string.Empty;
+
+        [Required]
+        [Compare("NewPassword", ErrorMessage = "Passwords do not match")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    public class UpdateProfileDto
+    {
+        [StringLength(100, MinimumLength = 2)]
+        public string? FirstName { get; set; }
+
+        [StringLength(100, MinimumLength = 2)]
+        public string? LastName { get; set; }
+
+        public string? Address { get; set; }
+
+        public string? City { get; set; }
+
+        public string? Country { get; set; }
+
+        public string? PostalCode { get; set; }
+    }
+
 }

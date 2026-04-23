@@ -15,12 +15,12 @@ RUN dotnet publish -c Release -o /app/publish --no-restore
 # runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
-ENV ASPNETCORE_URLS="http://+:80"
+ENV ASPNETCORE_URLS="http://+:10000"
 COPY --from=build /app/publish ./
 
 # create user for security
 RUN addgroup --system appgroup && adduser --system appuser && chown -R appuser:appgroup /app
 USER appuser
 
-EXPOSE 80
+EXPOSE 10000
 ENTRYPOINT ["dotnet", "SafiStore.Api.dll"]

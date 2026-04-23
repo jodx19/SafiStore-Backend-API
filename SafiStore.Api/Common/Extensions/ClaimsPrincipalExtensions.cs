@@ -11,10 +11,10 @@ namespace SafiStore.Api.Common.Extensions
             if (string.IsNullOrWhiteSpace(idClaim))
                 throw new UnauthorizedAccessException("User ID not found in token");
 
-            if (!int.TryParse(idClaim, out var id))
-                throw new UnauthorizedAccessException("Invalid user ID in token");
+            if (!int.TryParse(idClaim, out var userId))
+                throw new UnauthorizedAccessException("User ID is not a valid integer");
 
-            return id;
+            return userId;
         }
     }
 }

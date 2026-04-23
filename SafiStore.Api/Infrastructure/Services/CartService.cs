@@ -12,9 +12,9 @@ namespace SafiStore.Api.Infrastructure.Services
 {
     public class CartService : ICartService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly AppDbContext _context;
 
-        public CartService(ApplicationDbContext context)
+        public CartService(AppDbContext context)
         {
             _context = context;
         }

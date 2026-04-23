@@ -20,7 +20,7 @@ namespace SafiStore.Api.Infrastructure.Services
             string? searchTerm = null);
 
         // Get single product by ID
-        Task<ProductDto> GetProductByIdAsync(int id);
+        Task<ProductDto?> GetProductByIdAsync(int id);
 
         // Get all categories
         Task<List<CategoryDto>> GetCategoriesAsync();

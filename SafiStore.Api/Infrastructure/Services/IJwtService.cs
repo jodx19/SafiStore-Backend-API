@@ -1,12 +1,12 @@
 using System.Security.Claims;
+using SafiStore.Api.Models.Domain;
 
 namespace SafiStore.Api.Infrastructure.Services
 {
     public interface IJwtService
     {
-        string GenerateAccessToken(int userId, string email, string role);
+        string GenerateAccessToken(ApplicationUser user, IList<string> roles);
         string GenerateRefreshToken();
-        ClaimsPrincipal? ValidateToken(string token);
-        int GetUserIdFromToken(string token);
+        ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
     }
 }

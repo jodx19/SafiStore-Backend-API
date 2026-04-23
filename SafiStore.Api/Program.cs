@@ -1,145 +1,62 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using SafiStore.Api.Common.Helpers;
+using AspNetCoreRateLimit;
 using SafiStore.Api.Data;
 using SafiStore.Api.Infrastructure.Services;
-using SafiStore.Api.Middleware;
+using SafiStore.Api.Models.Domain;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var configuration = builder.Configuration;
-
-#region Controllers & JSON
-builder.Services.AddControllers(opts =>
+// Controllers + JSON
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
     {
-        opts.Filters.Add<SafiStore.Api.Filters.ApiResponseResultFilter>();
-    })
-    .AddJsonOptions(opts =>
-    {
-        opts.JsonSerializerOptions.PropertyNamingPolicy =
-            System.Text.Json.JsonNamingPolicy.CamelCase;
-
-        opts.JsonSerializerOptions.DefaultIgnoreCondition =
-            System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
-    });
-#endregion
-
-#region Database
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-#endregion
-
-#region Application Services
-builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddScoped<ICartService, CartService>();
-builder.Services.AddScoped<IOrderService, OrderService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IJwtService, JwtService>();
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<IReviewService, ReviewService>();
-#endregion
-
-#region Health Checks
-builder.Services.AddHealthChecks();
-#endregion
-
-#region Performance
-builder.Services.AddResponseCompression(options =>
-{
-    options.EnableForHttps = true;
-});
-#endregion
-
-#region CORS
-var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins")
-    .Get<string[]>() ?? new[] { "http://localhost:4200" };
-
-if (allowedOrigins.Length == 0)
-{
-    throw new InvalidOperationException("CORS AllowedOrigins must not be empty when credentials are allowed.");
-}
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("DefaultCorsPolicy", policy =>
-    {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-
-        if (!allowedOrigins.Contains("*"))
-        {
-            policy.AllowCredentials();
-        }
-    });
-});
-#endregion
-
-#region Swagger
-builder.Services.AddEndpointsApiExplorer();
-
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "SafiStore API",
-        Version = "v1",
-        Description = "Backend API for SafiStore"
+        options.JsonSerializerOptions.PropertyNamingPolicy =
+            JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.DefaultIgnoreCondition =
+            JsonIgnoreCondition.WhenWritingNull;
     });
 
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Name = "Authorization",
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        In = ParameterLocation.Header,
-        Description = "Enter: Bearer {your JWT token}"
-    });
+// Database
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorNumbersToAdd: null)));
 
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-});
-#endregion
-
-#region JWT Authentication
-var jwtSection = configuration.GetSection("Jwt");
-// ── Security verification ──────────────────────────────────────────
-var secretKey = jwtSection["Secret"];
-
-if (string.IsNullOrWhiteSpace(secretKey) || secretKey.Contains("REPLACE_WITH_ENV_VAR"))
+// Identity
+builder.Services.AddIdentity<ApplicationUser, IdentityRole<int>>(options =>
 {
-    throw new InvalidOperationException(
-        "CRITICAL: JWT Secret is not configured or still using placeholder. " +
-        "Ensure 'Jwt__Secret' environment variable is set in production.");
-}
+    // Password - Strong validation matching DTO requirements
+    options.Password.RequireDigit           = true;      // Must contain at least one digit
+    options.Password.RequireLowercase       = false;     // Lowercase not required
+    options.Password.RequireUppercase       = true;      // Must contain at least one uppercase
+    options.Password.RequireNonAlphanumeric = true;      // Must contain at least one special character
+    options.Password.RequiredLength         = 8;         // Minimum 8 characters
 
-if (secretKey.Length < 32)
-{
-    throw new InvalidOperationException(
-        "CRITICAL: Jwt:Secret is too short for HS256 (minimum 32 characters required).");
-}
-// ───────────────────────────────────────────────────────────────────
+    options.Lockout.DefaultLockoutTimeSpan  = TimeSpan.FromMinutes(5);
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.User.RequireUniqueEmail         = true;
+})
+.AddEntityFrameworkStores<AppDbContext>()
+.AddDefaultTokenProviders();
 
-var issuer   = jwtSection["Issuer"]   ?? "SafiStoreApi";
-var audience = jwtSection["Audience"] ?? "SafiStoreClient";
-
-var key = Encoding.UTF8.GetBytes(secretKey);
+// JWT
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var jwtSecret = jwtSettings["SecretKey"]
+    ?? Environment.GetEnvironmentVariable("JwtSettings__SecretKey")
+    ?? throw new InvalidOperationException(
+        "JwtSettings:SecretKey is not configured. Set the JwtSettings__SecretKey environment variable.");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -148,90 +65,251 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    // ── Force HTTPS in production ────────────────────────────────────
-    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-    options.SaveToken = false; // Don't store raw token in AuthenticationProperties (security)
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey        = new SymmetricSecurityKey(key),
-        ValidateIssuer          = true,
-        ValidIssuer             = issuer,
-        ValidateAudience        = true,
-        ValidAudience           = audience,
-        ValidateLifetime        = true,
-        RequireExpirationTime   = true,
-        ClockSkew               = TimeSpan.Zero  // No grace period — expired = rejected immediately
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        ValidateIssuer = true,
+        ValidIssuer = jwtSettings["Issuer"] ?? "SafiStoreAPI",
+        ValidateAudience = true,
+        ValidAudience = jwtSettings["Audience"] ?? "SafiStoreClient",
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            if (context.Exception is SecurityTokenExpiredException)
+                context.Response.Headers.Add("Token-Expired", "true");
+            return Task.CompletedTask;
+        }
     };
 });
 
-builder.Services.Configure<JwtSettings>(options =>
+// Dynamic CORS configuration from appsettings or Environment Variables
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+var allowedOriginsList = new List<string>(allowedOrigins);
+
+// Always allow Vercel production by default if not in config
+if (!allowedOriginsList.Contains("https://safistore.vercel.app"))
 {
-    options.Secret              = secretKey;
-    options.Issuer              = issuer;
-    options.Audience            = audience;
-    options.AccessTokenExpiration  = jwtSection.GetValue<int>("AccessTokenExpiration", 15);
-    options.RefreshTokenExpiration = jwtSection.GetValue<int>("RefreshTokenExpiration", 30);
+    allowedOriginsList.Add("https://safistore.vercel.app");
+}
+
+// Only allow localhost in development
+if (builder.Environment.IsDevelopment())
+{
+    if (!allowedOriginsList.Contains("http://localhost:4200"))
+    {
+        allowedOriginsList.Add("http://localhost:4200");
+    }
+}
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("SafiStorePolicy", policy =>
+        policy.WithOrigins(allowedOriginsList.ToArray())
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials());
 });
-#endregion
+
+// Rate Limiting Configuration
+builder.Services.Configure<IpRateLimitOptions>(options =>
+{
+    builder.Configuration.GetSection("IpRateLimiting").Bind(options);
+    options.EnableEndpointRateLimiting = true;
+
+    options.GeneralRules = new List<RateLimitRule>
+    {
+        new RateLimitRule
+        {
+            Endpoint = "*",
+            Limit = 100,
+            Period = "1m"
+        },
+        new RateLimitRule
+        {
+            Endpoint = "POST:/api/v1/auth/login",
+            Limit = 5,
+            Period = "1m"
+        },
+        new RateLimitRule
+        {
+            Endpoint = "POST:/api/v1/auth/register",
+            Limit = 5,
+            Period = "1m"
+        },
+        new RateLimitRule
+        {
+            Endpoint = "POST:/api/v1/auth/forgot-password",
+            Limit = 5,
+            Period = "1m"
+        },
+        new RateLimitRule
+        {
+            Endpoint = "POST:/api/v1/auth/reset-password",
+            Limit = 5,
+            Period = "1m"
+        },
+        new RateLimitRule
+        {
+            Endpoint = "POST:/api/v1/auth/change-password",
+            Limit = 5,
+            Period = "1m"
+        }
+    };
+});
+
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+builder.Services.AddMemoryCache(); // Required for rate limiting
+builder.Services.AddInMemoryRateLimiting();
+
+// Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "SafiStore API", Version = "v1" });
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization: Bearer {token}",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {{
+        new OpenApiSecurityScheme
+        {
+            Reference = new OpenApiReference
+                { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+        },
+        Array.Empty<string>()
+    }});
+});
+
+// Services
+builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<ICartService, CartService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
+
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-#region Middleware Pipeline
-
-// DEV: detailed exception page
-if (app.Environment.IsDevelopment())
+// Enable Forwarded Headers for IIS/Reverse Proxy (Crucial for HTTPS detection)
+app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
-    app.UseDeveloperExceptionPage();
-}
-else
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
+// Middleware pipeline ORDER IS CRITICAL
+app.UseExceptionHandler(appError =>
 {
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
-}
+    appError.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        
+        var contextFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (contextFeature != null)
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(contextFeature.Error, "Unhandled exception occurred.");
+            
+            // In production, we NEVER expose the full stack trace or internal messages.
+            await context.Response.WriteAsJsonAsync(new 
+            {
+                success = false,
+                message = "An unexpected error occurred. Please contact support.",
+                timestamp = DateTime.UtcNow
+            });
+        }
+    });
+});
 
-// 1) Global error handling (first middleware — catches everything below)
-app.UseMiddleware<ErrorHandlingMiddleware>();
-
-
-// 2️⃣ Infrastructure & Security
-app.UseHttpsRedirection();
-app.UseResponseCompression();
-app.UseCors("DefaultCorsPolicy");
-app.UseMiddleware<SecurityHeadersMiddleware>();
-
-// 3️⃣ Authentication & Authorization
-app.UseAuthentication();
-app.UseAuthorization();
-
-// 4️⃣ Response formatting (Disabled for performance: buffering middleware is a bottleneck)
-// app.UseMiddleware<ResponseFormattingMiddleware>();
-
-// 5️⃣ Swagger (DEV only)
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(options =>
+    app.UseSwaggerUI(c =>
     {
-        options.SwaggerEndpoint(
-            "/swagger/v1/swagger.json",
-            "SafiStore API v1");
-
-        options.RoutePrefix = "swagger";
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "SafiStore API v1");
+        c.RoutePrefix = "swagger";
     });
 }
 
+app.UseRouting(); // explicitly add UseRouting before UseCors
+app.UseCors("SafiStorePolicy");
 
-// Endpoints
-app.MapHealthChecks("/health");
+// Rate Limiting Middleware (must be after UseRouting)
+app.UseIpRateLimiting();
 
-// RISK-2 fix: requires Admin JWT — was previously anonymous, leaking traffic metrics
-app.MapGet("/metrics", () => Results.Json(MetricsService.GetMetrics()))
-   .RequireAuthorization(policy => policy.RequireRole("Admin"));
-
-
+app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
-app.Run();
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var result = JsonSerializer.Serialize(new
+        {
+            status = report.Status.ToString(),
+            timestamp = DateTime.UtcNow,
+            service = "SafiStore API",
+            version = "1.0.0",
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                duration = e.Value.Duration.TotalMilliseconds
+            })
+        });
+        await context.Response.WriteAsync(result);
+    }
+});
 
-#endregion
+app.MapGet("/ping", () => Results.Ok(new
+{
+    message = "SafiStore API is alive",
+    timestamp = DateTime.UtcNow,
+    environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+}));
+
+// Auto migrate on startup — wrapped so a DB failure doesn't kill the whole app
+try
+{
+    using var scope = app.Services.CreateScope();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    logger.LogInformation("Applying database migrations...");
+    await db.Database.MigrateAsync();
+    logger.LogInformation("Migrations applied successfully.");
+
+    // Seed roles (DISABLED: Using 'Role' column in Users table instead of separate Roles table)
+    /*
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
+    foreach (var role in new[] { "Admin", "Customer", "Vendor" })
+    {
+        if (!await roleManager.RoleExistsAsync(role))
+            await roleManager.CreateAsync(new IdentityRole<int>(role));
+    }
+    logger.LogInformation("Roles seeded successfully.");
+    */
+}
+catch (Exception ex)
+{
+    // Log the error but don't crash the app — it may still serve non-DB endpoints
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "Database migration/seeding failed on startup.");
+}
+
+app.Run();

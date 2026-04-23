@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: safistore-backend
+    runtime: docker
+    dockerfilePath: SafiStore.Api/Dockerfile
+    plan: free
+    region: ohio
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:10000
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: JwtSettings__SecretKey
+        generateValue: true
+      - key: JwtSettings__Issuer
+        value: SafiStoreAPI
+      - key: JwtSettings__Audience
+        value: SafiStoreClient
+    healthCheckPath: /health
+    # Render default port is 10000

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SafiStore.Api.Application.DTOs;
 using SafiStore.Api.Data;
 using SafiStore.Api.Common.Extensions;
@@ -12,11 +13,13 @@ namespace SafiStore.Api.Infrastructure.Services
 {
     public class OrderService : IOrderService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly AppDbContext _context;
+        private readonly ILogger<OrderService> _logger;
 
-        public OrderService(ApplicationDbContext context)
+        public OrderService(AppDbContext context, ILogger<OrderService> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         public async Task<SafiStore.Api.Application.DTOs.ServiceResult<int>> CreateOrderAsync(CreateOrderDto dto)
@@ -95,12 +98,14 @@ namespace SafiStore.Api.Infrastructure.Services
 
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
+                    _logger.LogInformation("Order {OrderId} created successfully for User {UserId}", order.Id, dto.UserId);
 
                     return Application.DTOs.ServiceResult<int>.SuccessResult(order.Id, "Order created successfully");
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
+                    _logger.LogError(ex, "Failed to create order for User {UserId}", dto.UserId);
                     // إرجاع تفاصيل الخطأ للمساعدة في التوثيق
                     return Application.DTOs.ServiceResult<int>.Fail("ORDER_CREATION_FAILED", $"Error: {ex.Message}");
                 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SafiStore.Api.Application.DTOs;
 using SafiStore.Api.Data;
 using SafiStore.Api.Common.Extensions;
@@ -17,11 +18,13 @@ namespace SafiStore.Api.Infrastructure.Services
     /// </summary>
     public class ProductService : IProductService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly AppDbContext _context;
+        private readonly ILogger<ProductService> _logger;
 
-        public ProductService(ApplicationDbContext context)
+        public ProductService(AppDbContext context, ILogger<ProductService> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         /// <summary>
@@ -38,13 +41,14 @@ namespace SafiStore.Api.Infrastructure.Services
         public async Task<(List<ProductDto> Products, int Total)> GetAllProductsAsync(
             int page = 1,
             int pageSize = 20,
-            string category = null,
-            string searchTerm = null)
+            string? category = null,
+            string? searchTerm = null)
         {   
             try
             {
                 // ── Select projection: Only fetch needed columns (no full entity load) ──
                 IQueryable<ProductDto> query = _context.Products.AsNoTracking()
+                    .Where(p => !p.IsDeleted) // Excluding soft-deleted products
                     .Select(p => new ProductDto
                     {
                         Id          = p.Id,
@@ -82,7 +86,7 @@ namespace SafiStore.Api.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in GetAllProductsAsync: {ex.Message}");
+                _logger.LogError(ex, "Error occurred in GetAllProductsAsync(page: {Page}, pageSize: {PageSize}, category: {Category}, searchTerm: {SearchTerm})", page, pageSize, category, searchTerm);
                 throw;
             }
         }
@@ -94,6 +98,7 @@ namespace SafiStore.Api.Infrastructure.Services
         {
             var product = await _context.Products
                 .AsNoTracking()
+                .Where(p => !p.IsDeleted)
                 .Include(p => p.Category)
                 .Include(p => p.Reviews)
                 .FirstOrDefaultAsync(p => p.Id == id);
@@ -221,15 +226,22 @@ namespace SafiStore.Api.Infrastructure.Services
         {
             var product = await _context.Products.FindAsync(id);
             if (product == null)
+            {
+                _logger.LogWarning("DeleteProductAsync failed: Product with ID {Id} not found", id);
                 throw new ArgumentException("Product not found");
+            }
 
-            // Remove from carts
-            var cartItems = _context.CartItems.Where(ci => ci.ProductId == id);
-            _context.CartItems.RemoveRange(cartItems);
+            // Soft delete: set flag and record removal
+            product.IsDeleted = true;
+            product.UpdatedAt = DateTime.UtcNow;
+            
+            _context.Products.Update(product);
 
-            // Remove product
-            _context.Products.Remove(product);
+            // Note: Carts and Orders should remain as they are for history tracking. 
+            // Carts will handle the 'deleted' state via availability checks during checkout.
+
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Product with ID {Id} was soft-deleted successfully", id);
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace SafiStore.Api.Models.Domain
@@ -31,8 +31,10 @@ namespace SafiStore.Api.Models.Domain
 
         public DateTime CreatedAt { get; set; }
 
+        public DateTime? UpdatedAt { get; set; }
+
         // Navigation
         public Product Product { get; set; } = null!;
-        public User User { get; set; } = null!;
+        public ApplicationUser User { get; set; } = null!;
     }
 }

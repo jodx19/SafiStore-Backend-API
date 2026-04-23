@@ -9,9 +9,9 @@ namespace SafiStore.Api.Infrastructure.Services
     /// </summary>
     public class UserService : IUserService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly AppDbContext _context;
 
-        public UserService(ApplicationDbContext context)
+        public UserService(AppDbContext context)
         {
             _context = context;
         }
@@ -32,8 +32,7 @@ namespace SafiStore.Api.Infrastructure.Services
                     Id        = u.Id,
                     FirstName = u.FirstName,
                     LastName  = u.LastName,
-                    Email     = u.Email,
-                    Role      = u.Role,
+                    Email     = u.Email!,
                     IsActive  = u.IsActive,
                     CreatedAt = u.CreatedAt
                 })

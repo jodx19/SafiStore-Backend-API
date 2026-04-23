@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -20,7 +20,7 @@ namespace SafiStore.Api.Models.Domain
         public DateTime UpdatedAt { get; set; }
 
         // Navigation
-        public User User { get; set; } = null!;
+        public ApplicationUser User { get; set; } = null!;
         public ICollection<CartItem> Items { get; set; } = new List<CartItem>();
     }
 }

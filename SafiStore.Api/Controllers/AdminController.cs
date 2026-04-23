@@ -97,10 +97,36 @@ namespace SafiStore.Api.Controllers
         [HttpPut("orders/{id:int}/status")]
         public async Task<ActionResult<ApiResponse<OrderDto>>> UpdateOrderStatus(int id, [FromBody] UpdateOrderStatusDto dto)
         {
+            if (!ModelState.IsValid)
+                return BadRequest(ApiResponse<OrderDto>.Error("VALIDATION_ERROR", "Invalid status data", ModelState));
+
             try
             {
                 var updatedOrder = await _orderService.UpdateOrderStatusAsync(id, dto.Status);
                 return Ok(ApiResponse<OrderDto>.Ok(updatedOrder, "Order status updated successfully"));
+            }
+            catch (System.ArgumentException ex)
+            {
+                return NotFound(ApiResponse<OrderDto>.Error("NOT_FOUND", ex.Message));
+            }
+            catch (System.InvalidOperationException ex)
+            {
+                return BadRequest(ApiResponse<OrderDto>.Error("BUSINESS_ERROR", ex.Message));
+            }
+        }
+
+        /// <summary>Cancel an order (Admin only).</summary>
+        [HttpPost("orders/{id:int}/cancel")]
+        public async Task<ActionResult<ApiResponse<OrderDto>>> CancelOrder(int id)
+        {
+            try
+            {
+                var cancelledOrder = await _orderService.UpdateOrderStatusAsync(id, "Cancelled");
+                
+                // TODO: Restore product stock if needed
+                // This would require adding stock restoration logic to OrderService
+                
+                return Ok(ApiResponse<OrderDto>.Ok(cancelledOrder, "Order cancelled successfully"));
             }
             catch (System.ArgumentException ex)
             {

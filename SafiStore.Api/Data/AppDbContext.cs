@@ -1,11 +1,13 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SafiStore.Api.Models.Domain;
 
 namespace SafiStore.Api.Data
 {
-    public class ApplicationDbContext : DbContext
+    public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<int>, int>
     {
-        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+        public AppDbContext(DbContextOptions<AppDbContext> options)
             : base(options)
         {
         }
@@ -15,17 +17,37 @@ namespace SafiStore.Api.Data
            ========================= */
         public DbSet<Product> Products => Set<Product>();
         public DbSet<Category> Categories => Set<Category>();
-        public DbSet<User> Users => Set<User>();
         public DbSet<Cart> Carts => Set<Cart>();
         public DbSet<CartItem> CartItems => Set<CartItem>();
         public DbSet<Order> Orders => Set<Order>();
         public DbSet<OrderItem> OrderItems => Set<OrderItem>();
         public DbSet<Review> Reviews => Set<Review>();
-        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Customize Identity Table Names & Mapping
+            modelBuilder.Entity<ApplicationUser>(entity =>
+            {
+                entity.ToTable("Users");
+
+                // Standard Identity table renaming is enough. 
+                // We'll let EF map the standard columns (Email, PasswordHash, etc.)
+                // If they are missing in the actual DB, we'll add them via a migration next.
+
+                // Ignore local properties not in SQL script (if they really aren't there)
+                entity.Ignore(u => u.AvatarUrl);
+                entity.Ignore(u => u.RefreshToken);
+                entity.Ignore(u => u.RefreshTokenExpiry);
+            });
+
+            modelBuilder.Entity<IdentityRole<int>>().ToTable("Roles");
+            modelBuilder.Entity<IdentityUserRole<int>>().ToTable("UserRoles");
+            modelBuilder.Entity<IdentityUserClaim<int>>().ToTable("UserClaims");
+            modelBuilder.Entity<IdentityUserLogin<int>>().ToTable("UserLogins");
+            modelBuilder.Entity<IdentityRoleClaim<int>>().ToTable("RoleClaims");
+            modelBuilder.Entity<IdentityUserToken<int>>().ToTable("UserTokens");
 
             /* =======================================================
                DECIMAL PRECISION
@@ -64,12 +86,10 @@ namespace SafiStore.Api.Data
             });
 
             /* =========================
-               USER
+               USER Relationships
                ========================= */
-            modelBuilder.Entity<User>(entity =>
+            modelBuilder.Entity<ApplicationUser>(entity =>
             {
-                entity.HasIndex(u => u.Email).IsUnique();
-
                 entity.HasMany(u => u.Orders)
                       .WithOne(o => o.User)
                       .HasForeignKey(o => o.UserId)
@@ -78,11 +98,6 @@ namespace SafiStore.Api.Data
                 entity.HasMany(u => u.Reviews)
                       .WithOne(r => r.User)
                       .HasForeignKey(r => r.UserId)
-                      .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasMany(u => u.RefreshTokens)
-                      .WithOne(rt => rt.User)
-                      .HasForeignKey(rt => rt.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
@@ -133,45 +148,6 @@ namespace SafiStore.Api.Data
                       .HasForeignKey(r => r.ProductId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
-
-            /* =========================
-               SEED DATA
-               ========================= */
-            modelBuilder.Entity<Category>().HasData(
-                new Category { Id = 1, Name = "Electronics" },
-                new Category { Id = 2, Name = "Clothing" },
-                new Category { Id = 3, Name = "Books" },
-                new Category { Id = 4, Name = "Home & Garden" }
-            );
-
-            modelBuilder.Entity<Product>().HasData(
-                new Product
-                {
-                    Id = 1,
-                    Title = "Laptop Pro",
-                    Description = "High-performance laptop for professionals",
-                    Price = 1299.99m,
-                    Stock = 50,
-                    CategoryId = 1,
-                    ImageUrl = "https://via.placeholder.com/300",
-                    Rating = 4.5m,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                },
-                new Product
-                {
-                    Id = 2,
-                    Title = "Wireless Mouse",
-                    Description = "Ergonomic wireless mouse",
-                    Price = 29.99m,
-                    Stock = 200,
-                    CategoryId = 1,
-                    ImageUrl = "https://via.placeholder.com/300",
-                    Rating = 4.0m,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                }
-            );
         }
     }
 }

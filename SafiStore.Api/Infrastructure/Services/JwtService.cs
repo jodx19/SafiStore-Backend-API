@@ -2,41 +2,44 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using SafiStore.Api.Common.Helpers;
+using SafiStore.Api.Models.Domain;
 
 namespace SafiStore.Api.Infrastructure.Services
 {
     public class JwtService : IJwtService
     {
-        private readonly JwtSettings _settings;
+        private readonly IConfiguration _config;
 
-        public JwtService(IOptions<JwtSettings> options)
-        {
-            _settings = options.Value;
-        }
+        public JwtService(IConfiguration config) => _config = config;
 
-        public string GenerateAccessToken(int userId, string email, string role)
+        public string GenerateAccessToken(ApplicationUser user, IList<string> roles)
         {
-            var key = Encoding.UTF8.GetBytes(_settings.Secret!);
+            var jwtSettings = _config.GetSection("JwtSettings");
+            var key = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!));
 
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-                new Claim(ClaimTypes.Email, email),
-                new Claim(ClaimTypes.Role, role)
+                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new(ClaimTypes.Email, user.Email!),
+                new(ClaimTypes.Name, $"{user.FirstName} {user.LastName}".Trim() ?? user.Email!),
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new(JwtRegisteredClaimNames.Iat,
+                    DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
             };
 
+            foreach (var role in roles)
+                claims.Add(new Claim(ClaimTypes.Role, role));
+
             var token = new JwtSecurityToken(
-                issuer: _settings.Issuer,
-                audience: _settings.Audience,
+                issuer: jwtSettings["Issuer"],
+                audience: jwtSettings["Audience"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(_settings.AccessTokenExpiration),
+                expires: DateTime.UtcNow.AddMinutes(
+                    double.Parse(jwtSettings["AccessTokenExpiryMinutes"] ?? "60")),
                 signingCredentials: new SigningCredentials(
-                    new SymmetricSecurityKey(key),
-                    SecurityAlgorithms.HmacSha256
-                )
+                    key, SecurityAlgorithms.HmacSha256)
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
@@ -44,38 +47,38 @@ namespace SafiStore.Api.Infrastructure.Services
 
         public string GenerateRefreshToken()
         {
-            return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+            var randomBytes = new byte[64];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomBytes);
+            return Convert.ToBase64String(randomBytes);
         }
 
-        public ClaimsPrincipal? ValidateToken(string token)
+        public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
         {
-            var handler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(_settings.Secret!);
+            var jwtSettings = _config.GetSection("JwtSettings");
+            var tokenValidationParams = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!)),
+                ValidateIssuer = true,
+                ValidIssuer = jwtSettings["Issuer"],
+                ValidateAudience = true,
+                ValidAudience = jwtSettings["Audience"],
+                ValidateLifetime = false // allow expired token
+            };
 
-            try
-            {
-                return handler.ValidateToken(token, new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ValidateIssuer = true,
-                    ValidIssuer = _settings.Issuer,
-                    ValidateAudience = true,
-                    ValidAudience = _settings.Audience,
-                    ValidateLifetime = true
-                }, out _);
-            }
-            catch
-            {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(
+                token, tokenValidationParams, out var securityToken);
+
+            if (securityToken is not JwtSecurityToken jwtToken ||
+                !jwtToken.Header.Alg.Equals(
+                    SecurityAlgorithms.HmacSha256,
+                    StringComparison.InvariantCultureIgnoreCase))
                 return null;
-            }
-        }
 
-        public int GetUserIdFromToken(string token)
-        {
-            var principal = ValidateToken(token);
-            var id = principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return int.TryParse(id, out var userId) ? userId : 0;
+            return principal;
         }
     }
 }
