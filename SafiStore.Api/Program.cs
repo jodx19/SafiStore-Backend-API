@@ -15,6 +15,8 @@ using SafiStore.Api.Models.Domain;
 using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
+// Ensure environment variables are available and prioritized (IIS supports __ separators)
+builder.Configuration.AddEnvironmentVariables();
 
 // Controllers + JSON
 builder.Services.AddControllers()
@@ -52,12 +54,25 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<int>>(options =>
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
-// JWT
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var jwtSecret = jwtSettings["SecretKey"]
-    ?? Environment.GetEnvironmentVariable("JwtSettings__SecretKey")
-    ?? throw new InvalidOperationException(
-        "JwtSettings:SecretKey is not configured. Set the JwtSettings__SecretKey environment variable.");
+// JWT: read secret in a way compatible with IIS environment variables
+var jwtSecret = builder.Configuration.GetValue<string>("JwtSettings:SecretKey")
+                ?? Environment.GetEnvironmentVariable("JWT_SECRET")
+                ?? Environment.GetEnvironmentVariable("JwtSettings__SecretKey");
+
+if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 32)
+{
+    // In production this must be set and >= 32 chars
+    if (builder.Environment.IsProduction())
+    {
+        throw new InvalidOperationException(
+            "JWT Secret Key is not configured correctly. It must be at least 32 characters long. " +
+            "Please set 'JwtSettings:SecretKey' in config or 'JWT_SECRET' environment variable (or 'JwtSettings__SecretKey').");
+    }
+
+    // Non-production: warn and continue (useful to allow containerized/dev deploys when env vars
+    // are provided later). Still recommend setting a strong secret.
+    Console.WriteLine("Warning: JWT secret key is missing or too short. This is allowed in non-production but not recommended.");
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -66,23 +81,28 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    // Use configuration fallbacks consistent with token generation code
+    var issuer = builder.Configuration.GetValue<string>("JwtSettings:Issuer") ?? "SafiStoreAPI";
+    var audience = builder.Configuration.GetValue<string>("JwtSettings:Audience") ?? "SafiStoreClient";
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret ?? string.Empty)),
         ValidateIssuer = true,
-        ValidIssuer = jwtSettings["Issuer"] ?? "SafiStoreAPI",
+        ValidIssuer = issuer,
         ValidateAudience = true,
-        ValidAudience = jwtSettings["Audience"] ?? "SafiStoreClient",
+        ValidAudience = audience,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
+
     options.Events = new JwtBearerEvents
     {
         OnAuthenticationFailed = context =>
         {
             if (context.Exception is SecurityTokenExpiredException)
-                context.Response.Headers.Add("Token-Expired", "true");
+                context.Response.Headers["Token-Expired"] = "true";
             return Task.CompletedTask;
         }
     };
@@ -201,6 +221,7 @@ builder.Services.AddScoped<IReviewService, ReviewService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>();
+builder.Services.AddApplicationInsightsTelemetry();
 
 var app = builder.Build();
 
@@ -235,7 +256,10 @@ app.UseExceptionHandler(appError =>
     });
 });
 
-if (app.Environment.IsDevelopment())
+// Enable Swagger in Development or when explicitly enabled via configuration
+// Set `Swagger:EnableInProduction` = true in production configuration or environment
+var enableSwagger = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:EnableInProduction");
+if (enableSwagger)
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
@@ -296,16 +320,21 @@ try
     await db.Database.MigrateAsync();
     logger.LogInformation("Migrations applied successfully.");
 
-    // Seed roles (DISABLED: Using 'Role' column in Users table instead of separate Roles table)
-    /*
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
-    foreach (var role in new[] { "Admin", "Customer", "Vendor" })
+    // Seed roles - ensure required roles exist in database
+    try
     {
-        if (!await roleManager.RoleExistsAsync(role))
-            await roleManager.CreateAsync(new IdentityRole<int>(role));
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
+        foreach (var role in new[] { "Admin", "Customer", "Vendor" })
+        {
+            if (!await roleManager.RoleExistsAsync(role))
+                await roleManager.CreateAsync(new IdentityRole<int>(role));
+        }
+        logger.LogInformation("Roles seeded successfully.");
     }
-    logger.LogInformation("Roles seeded successfully.");
-    */
+    catch (Exception roleEx)
+    {
+        logger.LogWarning(roleEx, "Role seeding failed. This is non-critical if roles already exist.");
+    }
 }
 catch (Exception ex)
 {

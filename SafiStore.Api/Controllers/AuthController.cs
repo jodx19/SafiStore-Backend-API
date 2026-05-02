@@ -3,6 +3,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
 using SafiStore.Api.Application.DTOs;
 using SafiStore.Api.Infrastructure.Services;
 using SafiStore.Api.Models.Auth;
@@ -19,89 +21,162 @@ namespace SafiStore.Api.Controllers
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IJwtService _jwtService;
         private readonly IConfiguration _config;
+        private readonly IWebHostEnvironment _env;
 
         public AuthController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
             IJwtService jwtService,
-            IConfiguration config)
+            IConfiguration config,
+            IWebHostEnvironment env)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _jwtService = jwtService;
             _config = config;
+            _env = env;
         }
 
         // POST api/auth/register
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(new AuthResponse
-                {
-                    Success = false,
-                    Message = "Validation failed",
-                    Errors = ModelState.Values
-                        .SelectMany(v => v.Errors)
-                        .Select(e => e.ErrorMessage)
-                        .ToList()
-                });
-
-            var existingUser = await _userManager.FindByEmailAsync(request.Email);
-            if (existingUser != null)
-                return Conflict(new AuthResponse
-                {
-                    Success = false,
-                    Message = "Email already registered",
-                    Errors = new List<string> { "Email is already in use" }
-                });
-
-            var user = new ApplicationUser
+            try
             {
-                UserName = request.Email,
-                Email = request.Email,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                CreatedAt = DateTime.UtcNow,
-                EmailConfirmed = true // set false if you want email verification
-            };
+                if (!ModelState.IsValid)
+                    return BadRequest(new AuthResponse
+                    {
+                        Success = false,
+                        Message = "Validation failed",
+                        Errors = ModelState.Values
+                            .SelectMany(v => v.Errors)
+                            .Select(e => e.ErrorMessage)
+                            .ToList()
+                    });
 
-            var result = await _userManager.CreateAsync(user, request.Password);
-            if (!result.Succeeded)
-                return BadRequest(new AuthResponse
+                var existingUser = await _userManager.FindByEmailAsync(request.Email);
+                if (existingUser != null)
+                    return Conflict(new AuthResponse
+                    {
+                        Success = false,
+                        Message = "Email already registered",
+                        Errors = new List<string> { "Email is already in use" }
+                    });
+
+                var user = new ApplicationUser
                 {
-                    Success = false,
-                    Message = "Registration failed",
-                    Errors = result.Errors.Select(e => e.Description).ToList()
-                });
+                    UserName = request.Email,
+                    Email = request.Email,
+                    FirstName = request.FirstName,
+                    LastName = request.LastName,
+                    CreatedAt = DateTime.UtcNow,
+                    EmailConfirmed = true // set false if you want email verification
+                };
 
-            user.Role = "Customer";
-            var roles = new List<string> { user.Role };
-            var accessToken = _jwtService.GenerateAccessToken(user, roles);
-            var refreshToken = _jwtService.GenerateRefreshToken();
-
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(
-                int.Parse(_config["JwtSettings:RefreshTokenExpiryDays"] ?? "7"));
-            await _userManager.UpdateAsync(user);
-
-            return Ok(new AuthResponse
-            {
-                Success = true,
-                Message = "Registration successful",
-                AccessToken = accessToken,
-                RefreshToken = refreshToken,
-                AccessTokenExpiry = DateTime.UtcNow.AddMinutes(60),
-                User = new UserDto
+                IdentityResult result;
+                try
                 {
-                    Id = user.Id,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    Email = user.Email!,
-                    Roles = roles,
-                    CreatedAt = user.CreatedAt
+                    result = await _userManager.CreateAsync(user, request.Password);
                 }
-            });
+                catch (DbUpdateException dbEx)
+                {
+                    // Log full DB error
+                    var logger = _userManager.Logger;
+                    logger.LogError(dbEx, "DbUpdateException during CreateAsync for {Email}", request.Email);
+
+                    // Per your request: expose inner SQL message when NOT in development (temporary)
+                    var exposedMessage = dbEx.InnerException?.Message ?? dbEx.Message;
+                    var messageToReturn = !_env.IsDevelopment() ? exposedMessage : "Database error during registration. Check server logs.";
+
+                    return StatusCode(500, new AuthResponse
+                    {
+                        Success = false,
+                        Message = "Database error during registration.",
+                        Errors = new List<string> { messageToReturn }
+                    });
+                }
+
+                if (!result.Succeeded)
+                    return BadRequest(new AuthResponse
+                    {
+                        Success = false,
+                        Message = "Registration failed",
+                        Errors = result.Errors.Select(e => e.Description).ToList()
+                    });
+
+                user.Role = "Customer";
+                var roles = new List<string> { user.Role };
+
+                // Generating Access Token - This is a common point of failure if JWT is misconfigured
+                var accessToken = _jwtService.GenerateAccessToken(user, roles);
+                var refreshToken = _jwtService.GenerateRefreshToken();
+
+                user.RefreshToken = refreshToken;
+                user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(
+                    int.Parse(_config["JwtSettings:RefreshTokenExpiryDays"] ?? "7"));
+
+                try
+                {
+                    var updateResult = await _userManager.UpdateAsync(user);
+                    if (!updateResult.Succeeded)
+                    {
+                        // Log the errors but don't fail the registration
+                        var logger = _userManager.Logger;
+                        logger.LogWarning("Failed to update user with refresh token: {Errors}",
+                            string.Join(", ", updateResult.Errors.Select(e => e.Description)));
+                    }
+                }
+                catch (DbUpdateException dbEx)
+                {
+                    var logger = _userManager.Logger;
+                    logger.LogError(dbEx, "DbUpdateException during UpdateAsync for {Email}", request.Email);
+
+                    var exposedMessage = dbEx.InnerException?.Message ?? dbEx.Message;
+                    var messageToReturn = !_env.IsDevelopment() ? exposedMessage : "Database error updating user. Check server logs.";
+
+                    return StatusCode(500, new AuthResponse
+                    {
+                        Success = false,
+                        Message = "Database error updating user.",
+                        Errors = new List<string> { messageToReturn }
+                    });
+                }
+
+                return Ok(new AuthResponse
+                {
+                    Success = true,
+                    Message = "Registration successful",
+                    AccessToken = accessToken,
+                    RefreshToken = refreshToken,
+                    AccessTokenExpiry = DateTime.UtcNow.AddMinutes(60),
+                    User = new UserDto
+                    {
+                        Id = user.Id,
+                        FirstName = user.FirstName,
+                        LastName = user.LastName,
+                        Email = user.Email!,
+                        Roles = roles,
+                        CreatedAt = user.CreatedAt
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                // Log the detailed exception
+                var logger = _userManager.Logger;
+                logger.LogError(ex, "An error occurred during user registration for email {Email}", request.Email);
+
+                return StatusCode(500, new AuthResponse
+                {
+                    Success = false,
+                    Message = "An internal server error occurred during registration.",
+                    Errors = new List<string> { 
+                        _env.IsDevelopment()
+                            ? ex.Message 
+                            : "Please check server logs for details." 
+                    }
+                });
+            }
         }
 
         // POST api/auth/login

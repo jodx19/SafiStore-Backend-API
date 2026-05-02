@@ -20,19 +20,19 @@ namespace SafiStore.Api.Application.DTOs
         public int UserId { get; set; }
 
         [Required]
-        public List<OrderItemDto> Items { get; set; }
+        public List<OrderItemDto> Items { get; set; } = new();
 
         [Required]
-        public string ShippingAddress { get; set; }
+        public required string ShippingAddress { get; set; }
 
         [Required]
-        public string City { get; set; }
+        public required string City { get; set; }
 
         [Required]
-        public string Country { get; set; }
+        public required string Country { get; set; }
 
         [Required]
-        public string PostalCode { get; set; }
+        public required string PostalCode { get; set; }
 
         public string? PaymentMethod { get; set; }
     }

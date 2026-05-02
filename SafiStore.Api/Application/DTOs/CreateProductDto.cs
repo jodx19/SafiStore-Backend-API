@@ -6,11 +6,11 @@ namespace SafiStore.Api.Application.DTOs
     {
         [Required]
         [StringLength(200, MinimumLength = 3)]
-        public string Title { get; set; }
+        public required string Title { get; set; }
 
         [Required]
         [StringLength(2000, MinimumLength = 10)]
-        public string Description { get; set; }
+        public required string Description { get; set; }
 
         [Required]
         [Range(0.01, 999999.99)]
@@ -25,7 +25,6 @@ namespace SafiStore.Api.Application.DTOs
 
         [Url]
         public string? ImageUrl { get; set; }
-
 
         public string Status { get; set; } = "Pending";
     }

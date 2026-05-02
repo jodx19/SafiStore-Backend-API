@@ -16,8 +16,14 @@ namespace SafiStore.Api.Infrastructure.Services
         public string GenerateAccessToken(ApplicationUser user, IList<string> roles)
         {
             var jwtSettings = _config.GetSection("JwtSettings");
-            var key = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!));
+            var secretKey = _config["JwtSettings:SecretKey"] 
+                           ?? Environment.GetEnvironmentVariable("JWT_SECRET") 
+                           ?? Environment.GetEnvironmentVariable("JwtSettings__SecretKey");
+
+            if (string.IsNullOrEmpty(secretKey))
+                throw new InvalidOperationException("JWT Secret Key is not configured.");
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
 
             var claims = new List<Claim>
             {
@@ -55,16 +61,18 @@ namespace SafiStore.Api.Infrastructure.Services
 
         public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
         {
-            var jwtSettings = _config.GetSection("JwtSettings");
+            var secretKey = _config["JwtSettings:SecretKey"] 
+                           ?? Environment.GetEnvironmentVariable("JWT_SECRET") 
+                           ?? Environment.GetEnvironmentVariable("JwtSettings__SecretKey");
+
             var tokenValidationParams = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!)),
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey ?? "")),
                 ValidateIssuer = true,
-                ValidIssuer = jwtSettings["Issuer"],
+                ValidIssuer = _config["JwtSettings:Issuer"],
                 ValidateAudience = true,
-                ValidAudience = jwtSettings["Audience"],
+                ValidAudience = _config["JwtSettings:Audience"],
                 ValidateLifetime = false // allow expired token
             };
 

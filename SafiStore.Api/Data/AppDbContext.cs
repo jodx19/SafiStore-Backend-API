@@ -27,19 +27,89 @@ namespace SafiStore.Api.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Customize Identity Table Names & Mapping
+            // Customize Identity Table Names & Mapping to match existing DB (Users table)
             modelBuilder.Entity<ApplicationUser>(entity =>
             {
                 entity.ToTable("Users");
 
-                // Standard Identity table renaming is enough. 
-                // We'll let EF map the standard columns (Email, PasswordHash, etc.)
-                // If they are missing in the actual DB, we'll add them via a migration next.
+                // Explicit column mappings to match existing schema
+                entity.HasKey(u => u.Id);
+                entity.Property(u => u.Id).HasColumnName("Id");
 
-                // Ignore local properties not in SQL script (if they really aren't there)
+                entity.Property(u => u.FirstName)
+                      .HasColumnName("FirstName")
+                      .IsRequired()
+                      .HasMaxLength(100);
+
+                entity.Property(u => u.LastName)
+                      .HasColumnName("LastName")
+                      .IsRequired()
+                      .HasMaxLength(100);
+
+                entity.Property(u => u.Email)
+                      .HasColumnName("Email")
+                      .HasMaxLength(450);
+
+                entity.Property(u => u.UserName)
+                      .HasColumnName("UserName")
+                      .HasMaxLength(256);
+
+                entity.Property(u => u.NormalizedEmail)
+                      .HasColumnName("NormalizedEmail")
+                      .HasMaxLength(256);
+
+                entity.Property(u => u.NormalizedUserName)
+                      .HasColumnName("NormalizedUserName")
+                      .HasMaxLength(256);
+
+                entity.Property(u => u.PasswordHash)
+                      .HasColumnName("PasswordHash");
+
+                entity.Property(u => u.PhoneNumber)
+                      .HasColumnName("PhoneNumber");
+
+                entity.Property(u => u.Role)
+                      .HasColumnName("Role")
+                      .HasMaxLength(50);
+
+                entity.Property(u => u.Address)
+                      .HasColumnName("Address")
+                      .HasMaxLength(255);
+
+                entity.Property(u => u.City)
+                      .HasColumnName("City")
+                      .HasMaxLength(50);
+
+                entity.Property(u => u.Country)
+                      .HasColumnName("Country")
+                      .HasMaxLength(50);
+
+                entity.Property(u => u.PostalCode)
+                      .HasColumnName("PostalCode")
+                      .HasMaxLength(10);
+
+                entity.Property(u => u.IsActive)
+                      .HasColumnName("IsActive");
+
+                entity.Property(u => u.CreatedAt)
+                      .HasColumnName("CreatedAt");
+
+                entity.Property(u => u.UpdatedAt)
+                      .HasColumnName("UpdatedAt");
+
+                // Refresh token fields
+                entity.Property(u => u.RefreshToken)
+                      .HasColumnName("RefreshToken");
+
+                entity.Property(u => u.RefreshTokenExpiry)
+                      .HasColumnName("RefreshTokenExpiry");
+
+                // Concurrency/identity stamps (map if present)
+                entity.Property<string>("ConcurrencyStamp").HasColumnName("ConcurrencyStamp");
+                entity.Property<string>("SecurityStamp").HasColumnName("SecurityStamp");
+
+                // Ignore local-only properties that don't exist in SQL
                 entity.Ignore(u => u.AvatarUrl);
-                entity.Ignore(u => u.RefreshToken);
-                entity.Ignore(u => u.RefreshTokenExpiry);
             });
 
             modelBuilder.Entity<IdentityRole<int>>().ToTable("Roles");

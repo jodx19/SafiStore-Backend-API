@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using SafiStore.Api.Application.DTOs;
-
 namespace SafiStore.Api.Application.DTOs
 {
     /// <summary>
