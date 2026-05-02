@@ -1,8 +1,5 @@
 // Services/IProductService.cs
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using SafiStore.Api.Application.DTOs;
-using SafiStore.Api.Models.Domain;
 
 namespace SafiStore.Api.Infrastructure.Services
 {
@@ -26,7 +23,7 @@ namespace SafiStore.Api.Infrastructure.Services
         Task<List<CategoryDto>> GetCategoriesAsync();
 
         // Create new product (Admin only)
-        Task<SafiStore.Api.Application.DTOs.ServiceResult<ProductDto>> CreateProductAsync(CreateProductDto dto);
+        Task<ServiceResult<ProductDto>> CreateProductAsync(CreateProductDto dto);
 
         // Update existing product (Admin only)
         Task<ProductDto> UpdateProductAsync(int id, UpdateProductDto dto);

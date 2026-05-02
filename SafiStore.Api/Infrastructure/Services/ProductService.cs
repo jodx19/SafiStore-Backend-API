@@ -1,10 +1,5 @@
 // Services/ProductService.cs
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using SafiStore.Api.Application.DTOs;
 using SafiStore.Api.Data;
 using SafiStore.Api.Common.Extensions;
@@ -58,7 +53,7 @@ namespace SafiStore.Api.Infrastructure.Services
                         Stock       = p.Stock,
                         ImageUrl    = p.ImageUrl,
                         CategoryId  = p.CategoryId,
-                        CategoryName = p.Category != null ? p.Category.Name : null
+                        CategoryName = p.Category != null ? p.Category.Name : string.Empty
                     });
 
                 // Filter by category if provided
@@ -131,17 +126,17 @@ namespace SafiStore.Api.Infrastructure.Services
         /// Create new product (Admin only)
         /// Validates stock and price constraints
         /// </summary>
-        public async Task<SafiStore.Api.Application.DTOs.ServiceResult<ProductDto>> CreateProductAsync(CreateProductDto dto)
+        public async Task<ServiceResult<ProductDto>> CreateProductAsync(CreateProductDto dto)
         {
             // Verify category exists
             var category = await _context.Categories.FindAsync(dto.CategoryId);
             if (category == null)
-                return Application.DTOs.ServiceResult<ProductDto>.Fail("INVALID_CATEGORY", "Invalid category ID");
+                return ServiceResult<ProductDto>.Fail("INVALID_CATEGORY", "Invalid category ID");
 
             // Check for simple uniqueness constraint on Title to avoid DB unique index violations
             // (There is no SKU property in the model; using Title as an example unique check.)
             if (await _context.Products.AnyAsync(p => p.Title == dto.Title && p.CategoryId == dto.CategoryId))
-                return Application.DTOs.ServiceResult<ProductDto>.Fail("PRODUCT_TITLE_EXISTS", "A product with the same title already exists");
+                return ServiceResult<ProductDto>.Fail("PRODUCT_TITLE_EXISTS", "A product with the same title already exists");
 
             // Create new product entity
             var product = new Product
@@ -164,17 +159,17 @@ namespace SafiStore.Api.Infrastructure.Services
             catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx) when (dbEx.IsUniqueConstraintViolation())
             {
                 // Race condition: map DB unique constraint violation to a service-level failure.
-                return Application.DTOs.ServiceResult<ProductDto>.Fail("PRODUCT_TITLE_EXISTS", "A product with the same title already exists");
+                return ServiceResult<ProductDto>.Fail("PRODUCT_TITLE_EXISTS", "A product with the same title already exists");
             }
             catch (Microsoft.EntityFrameworkCore.DbUpdateException)
             {
-                return Application.DTOs.ServiceResult<ProductDto>.Fail("PRODUCT_CREATION_FAILED", "Unable to create product");
+                return ServiceResult<ProductDto>.Fail("PRODUCT_CREATION_FAILED", "Unable to create product");
             }
 
             // Load category for DTO mapping
             await _context.Entry(product).Reference(p => p.Category).LoadAsync();
 
-            return Application.DTOs.ServiceResult<ProductDto>.SuccessResult(MapToDto(product), "Product created successfully");
+            return ServiceResult<ProductDto>.SuccessResult(MapToDto(product), "Product created successfully");
         }
 
         /// <summary>
@@ -272,7 +267,7 @@ namespace SafiStore.Api.Infrastructure.Services
                 Price = product.Price,
                 Stock = product.Stock,
                 CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name,
+                CategoryName = product.Category?.Name ?? string.Empty,
                 ImageUrl = product.ImageUrl,
                 Rating = product.Rating ?? 0,
                 CreatedAt = product.CreatedAt,
