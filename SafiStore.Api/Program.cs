@@ -224,8 +224,8 @@ builder.Services.AddHealthChecks()
 builder.Services.AddApplicationInsightsTelemetry();
 
 var app = builder.Build();
-// Temporarily enable developer exception page to see detailed errors when testing on remote host
-app.UseDeveloperExceptionPage();
+if (app.Environment.IsDevelopment())
+    app.UseDeveloperExceptionPage();
 
 // Enable Forwarded Headers for IIS/Reverse Proxy (Crucial for HTTPS detection)
 app.UseForwardedHeaders(new ForwardedHeadersOptions
@@ -317,20 +317,17 @@ try
     await db.Database.MigrateAsync();
     logger.LogInformation("Migrations applied successfully.");
 
-    // Seed roles - ensure required roles exist in database
+    // Seed data (categories, products, default admin)
     try
     {
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
-        foreach (var role in new[] { "Admin", "Customer", "Vendor" })
-        {
-            if (!await roleManager.RoleExistsAsync(role))
-                await roleManager.CreateAsync(new IdentityRole<int>(role));
-        }
-        logger.LogInformation("Roles seeded successfully.");
+        await DbSeeder.SeedAsync(db, userManager, roleManager, logger);
+        logger.LogInformation("Database seeded successfully.");
     }
-    catch (Exception roleEx)
+    catch (Exception seedEx)
     {
-        logger.LogWarning(roleEx, "Role seeding failed. This is non-critical if roles already exist.");
+        logger.LogWarning(seedEx, "Database seeding failed. This is non-critical if data already exists.");
     }
 }
 catch (Exception ex)

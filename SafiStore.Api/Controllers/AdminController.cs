@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using SafiStore.Api.Application.DTOs;
 using SafiStore.Api.Infrastructure.Services;
+using SafiStore.Api.Models.Domain;
 
 namespace SafiStore.Api.Controllers
 {
@@ -15,15 +18,18 @@ namespace SafiStore.Api.Controllers
         private readonly IProductService _productService;
         private readonly IOrderService _orderService;
         private readonly IUserService _userService;
+        private readonly UserManager<ApplicationUser> _userManager;
 
         public AdminController(
             IProductService productService,
             IOrderService orderService,
-            IUserService userService)
+            IUserService userService,
+            UserManager<ApplicationUser> userManager)
         {
             _productService = productService;
             _orderService = orderService;
             _userService = userService;
+            _userManager = userManager;
         }
 
         /// <summary>Get all orders (Admin only).</summary>
@@ -122,10 +128,6 @@ namespace SafiStore.Api.Controllers
             try
             {
                 var cancelledOrder = await _orderService.UpdateOrderStatusAsync(id, "Cancelled");
-                
-                // TODO: Restore product stock if needed
-                // This would require adding stock restoration logic to OrderService
-                
                 return Ok(ApiResponse<OrderDto>.Ok(cancelledOrder, "Order cancelled successfully"));
             }
             catch (System.ArgumentException ex)
@@ -137,5 +139,46 @@ namespace SafiStore.Api.Controllers
                 return BadRequest(ApiResponse<OrderDto>.Error("BUSINESS_ERROR", ex.Message));
             }
         }
+
+        /// <summary>Create a new admin user (Admin only).</summary>
+        [HttpPost("users")]
+        public async Task<ActionResult<ApiResponse<object>>> CreateAdmin([FromBody] CreateAdminRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ApiResponse<object>.Error("VALIDATION_ERROR", "Invalid data", ModelState));
+
+            var existingUser = await _userManager.FindByEmailAsync(request.Email);
+            if (existingUser != null)
+                return Conflict(ApiResponse<object>.Error("DUPLICATE_EMAIL", "Email already registered"));
+
+            var user = new ApplicationUser
+            {
+                UserName = request.Email,
+                Email = request.Email,
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                CreatedAt = System.DateTime.UtcNow,
+                EmailConfirmed = true
+            };
+
+            var result = await _userManager.CreateAsync(user, request.Password);
+            if (!result.Succeeded)
+                return BadRequest(ApiResponse<object>.Error("CREATION_FAILED",
+                    "Failed to create user: " + string.Join(", ", result.Errors.Select(e => e.Description))));
+
+            await _userManager.AddToRoleAsync(user, "Admin");
+            user.Role = "Admin";
+            await _userManager.UpdateAsync(user);
+
+            return Ok(ApiResponse<object>.Ok(new { user.Id, user.Email, user.FirstName, user.LastName }, "Admin created successfully"));
+        }
+    }
+
+    public class CreateAdminRequest
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
     }
 }

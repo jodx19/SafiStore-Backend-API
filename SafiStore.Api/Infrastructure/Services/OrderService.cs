@@ -192,11 +192,31 @@ namespace SafiStore.Api.Infrastructure.Services
 
         public async Task<OrderDto> UpdateOrderStatusAsync(int orderId, string status)
         {
-            var order = await _context.Orders.FindAsync(orderId);
+            var order = await _context.Orders
+                .Include(o => o.Items)
+                    .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
             if (order == null) throw new ArgumentException("Order not found");
+
+            // Restore product stock when cancelling an order
+            if (status == "Cancelled" && order.Status != "Cancelled")
+            {
+                foreach (var item in order.Items)
+                {
+                    if (item.Product != null)
+                    {
+                        item.Product.Stock += item.Quantity;
+                        _context.Products.Update(item.Product);
+                        _logger.LogInformation("Restored {Quantity} units of Product {ProductId} from cancelled Order {OrderId}",
+                            item.Quantity, item.ProductId, orderId);
+                    }
+                }
+            }
 
             order.Status = status;
             order.UpdatedAt = DateTime.UtcNow;
+            if (status == "Shipped") order.ShippedAt = DateTime.UtcNow;
+            if (status == "Delivered") order.DeliveredAt = DateTime.UtcNow;
             _context.Orders.Update(order);
             await _context.SaveChangesAsync();
 

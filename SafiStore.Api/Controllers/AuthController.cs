@@ -104,6 +104,15 @@ namespace SafiStore.Api.Controllers
                         Errors = result.Errors.Select(e => e.Description).ToList()
                     });
 
+                // Add to Identity role system (required for [Authorize(Roles = "Admin")])
+                var roleResult = await _userManager.AddToRoleAsync(user, "Customer");
+                if (!roleResult.Succeeded)
+                {
+                    var logger2 = _userManager.Logger;
+                    logger2.LogWarning("Failed to add user to Customer role: {Errors}",
+                        string.Join(", ", roleResult.Errors.Select(e => e.Description)));
+                }
+
                 user.Role = "Customer";
                 var roles = new List<string> { user.Role };
 
