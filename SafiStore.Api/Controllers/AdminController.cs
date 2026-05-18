@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq;
 using SafiStore.Api.Application.DTOs;
 using SafiStore.Api.Infrastructure.Services;
 using SafiStore.Api.Models.Domain;
+using SafiStore.Api.Data;
 
 namespace SafiStore.Api.Controllers
 {
@@ -19,17 +21,20 @@ namespace SafiStore.Api.Controllers
         private readonly IOrderService _orderService;
         private readonly IUserService _userService;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly AppDbContext _context;
 
         public AdminController(
             IProductService productService,
             IOrderService orderService,
             IUserService userService,
-            UserManager<ApplicationUser> userManager)
+            UserManager<ApplicationUser> userManager,
+            AppDbContext context)
         {
             _productService = productService;
             _orderService = orderService;
             _userService = userService;
             _userManager = userManager;
+            _context = context;
         }
 
         /// <summary>Get all orders (Admin only).</summary>

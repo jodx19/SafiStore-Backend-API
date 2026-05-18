@@ -223,6 +223,7 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>();
 builder.Services.AddApplicationInsightsTelemetry();
+builder.Services.AddHttpClient();
 
 var app = builder.Build();
 if (app.Environment.IsDevelopment())
