@@ -15,11 +15,13 @@ namespace SafiStore.Api.Infrastructure.Services
     {
         private readonly AppDbContext _context;
         private readonly ILogger<OrderService> _logger;
+        private readonly INotificationService _notificationService;
 
-        public OrderService(AppDbContext context, ILogger<OrderService> logger)
+        public OrderService(AppDbContext context, ILogger<OrderService> logger, INotificationService notificationService)
         {
             _context = context;
             _logger = logger;
+            _notificationService = notificationService;
         }
 
         public async Task<SafiStore.Api.Application.DTOs.ServiceResult<int>> CreateOrderAsync(CreateOrderDto dto)
@@ -98,6 +100,10 @@ namespace SafiStore.Api.Infrastructure.Services
 
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
+
+                    // 7. إشعار الأدمن بالطلب الجديد
+                    await NotifyAdminsAsync("new_order", $"New order #{order.Id} placed - ${total:F2}", order.Id);
+
                     _logger.LogInformation("Order {OrderId} created successfully for User {UserId}", order.Id, dto.UserId);
 
                     return Application.DTOs.ServiceResult<int>.SuccessResult(order.Id, "Order created successfully");
@@ -220,6 +226,13 @@ namespace SafiStore.Api.Infrastructure.Services
             _context.Orders.Update(order);
             await _context.SaveChangesAsync();
 
+            // إشعار المستخدم بتغيير حالة الطلب
+            await _notificationService.CreateNotificationAsync(
+                order.UserId,
+                "order_status",
+                $"Order #{order.Id} status updated to {status}",
+                order.Id);
+
             return new OrderDto
             {
                 Id = order.Id,
@@ -232,6 +245,24 @@ namespace SafiStore.Api.Infrastructure.Services
                 CreatedAt = order.CreatedAt,
                 TotalAmount = order.TotalAmount
             };
+        }
+        private async Task NotifyAdminsAsync(string type, string message, int? orderId = null)
+        {
+            try
+            {
+                var adminUsers = await _context.Users
+                    .Where(u => u.Role == "Admin" && u.IsActive)
+                    .ToListAsync();
+
+                foreach (var admin in adminUsers)
+                {
+                    await _notificationService.CreateNotificationAsync(admin.Id, type, message, orderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to notify admins about order event");
+            }
         }
     }
 }
