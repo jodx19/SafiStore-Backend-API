@@ -127,6 +127,7 @@ namespace SafiStore.Api.Data
                 // Provider-agnostic precision
                 entity.Property(p => p.Price).HasPrecision(18, 2);
                 entity.Property(p => p.Rating).HasPrecision(18, 2);
+                entity.Property(p => p.ComparePrice).HasPrecision(18, 2);
             });
 
             modelBuilder.Entity<Order>(entity =>

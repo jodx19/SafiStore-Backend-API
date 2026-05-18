@@ -56,6 +56,10 @@ namespace SafiStore.Api.Models.Domain
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
 
+        // Compare at price (for displaying discounts)
+        [Range(0, 999999.99)]
+        public decimal? ComparePrice { get; set; }
+
         // Soft delete flag
         public bool IsDeleted { get; set; } = false;
 

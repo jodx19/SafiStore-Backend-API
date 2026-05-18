@@ -224,6 +224,8 @@ builder.Services.AddHealthChecks()
 builder.Services.AddApplicationInsightsTelemetry();
 
 var app = builder.Build();
+// Temporarily enable developer exception page to see detailed errors when testing on remote host
+app.UseDeveloperExceptionPage();
 
 // Enable Forwarded Headers for IIS/Reverse Proxy (Crucial for HTTPS detection)
 app.UseForwardedHeaders(new ForwardedHeadersOptions
@@ -256,18 +258,13 @@ app.UseExceptionHandler(appError =>
     });
 });
 
-// Enable Swagger in Development or when explicitly enabled via configuration
-// Set `Swagger:EnableInProduction` = true in production configuration or environment
-var enableSwagger = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:EnableInProduction");
-if (enableSwagger)
+// Enable Swagger/UI unconditionally for testing (temporarily)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "SafiStore API v1");
-        c.RoutePrefix = "swagger";
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "SafiStore API v1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseRouting(); // explicitly add UseRouting before UseCors
 app.UseCors("SafiStorePolicy");

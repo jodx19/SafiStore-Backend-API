@@ -26,6 +26,9 @@ namespace SafiStore.Api.Application.DTOs
         [Url]
         public string? ImageUrl { get; set; }
 
+        [Range(0, 999999.99)]
+        public decimal? ComparePrice { get; set; }
+
         public string Status { get; set; } = "Pending";
     }
 }

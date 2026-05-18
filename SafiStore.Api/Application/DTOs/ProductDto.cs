@@ -15,5 +15,8 @@ namespace SafiStore.Api.Application.DTOs
         public decimal Rating { get; set; } = 0;
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+        public decimal? ComparePrice { get; set; }
+        public bool IsNew { get; set; }
+        public bool IsSale { get; set; }
     }
 }

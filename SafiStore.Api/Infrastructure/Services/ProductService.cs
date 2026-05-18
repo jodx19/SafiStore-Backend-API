@@ -41,6 +41,8 @@ namespace SafiStore.Api.Infrastructure.Services
         {   
             try
             {
+                var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+
                 // ── Select projection: Only fetch needed columns (no full entity load) ──
                 IQueryable<ProductDto> query = _context.Products.AsNoTracking()
                     .Where(p => !p.IsDeleted) // Excluding soft-deleted products
@@ -53,7 +55,13 @@ namespace SafiStore.Api.Infrastructure.Services
                         Stock       = p.Stock,
                         ImageUrl    = p.ImageUrl,
                         CategoryId  = p.CategoryId,
-                        CategoryName = p.Category != null ? p.Category.Name : string.Empty
+                        CategoryName = p.Category != null ? p.Category.Name : string.Empty,
+                        Rating      = p.Rating ?? 0,
+                        CreatedAt   = p.CreatedAt,
+                        UpdatedAt   = p.UpdatedAt,
+                        ComparePrice = p.ComparePrice,
+                        IsNew       = p.CreatedAt >= thirtyDaysAgo,
+                        IsSale      = p.ComparePrice != null && p.ComparePrice > p.Price
                     });
 
                 // Filter by category if provided
@@ -147,6 +155,7 @@ namespace SafiStore.Api.Infrastructure.Services
                 Stock = dto.Stock,
                 CategoryId = dto.CategoryId,
                 ImageUrl = dto.ImageUrl,
+                ComparePrice = dto.ComparePrice,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -205,6 +214,9 @@ namespace SafiStore.Api.Infrastructure.Services
             if (!string.IsNullOrEmpty(dto.ImageUrl))
                 product.ImageUrl = dto.ImageUrl;
 
+            if (dto.ComparePrice.HasValue)
+                product.ComparePrice = dto.ComparePrice.Value;
+
             product.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -259,6 +271,8 @@ namespace SafiStore.Api.Infrastructure.Services
         /// </summary>
         private ProductDto MapToDto(Product product)
         {
+            var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+
             return new ProductDto
             {
                 Id = product.Id,
@@ -271,7 +285,10 @@ namespace SafiStore.Api.Infrastructure.Services
                 ImageUrl = product.ImageUrl,
                 Rating = product.Rating ?? 0,
                 CreatedAt = product.CreatedAt,
-                UpdatedAt = product.UpdatedAt
+                UpdatedAt = product.UpdatedAt,
+                ComparePrice = product.ComparePrice,
+                IsNew = product.CreatedAt >= thirtyDaysAgo,
+                IsSale = product.ComparePrice != null && product.ComparePrice > product.Price
             };
         }
     }
