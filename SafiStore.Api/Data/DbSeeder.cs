@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SafiStore.Api.Models.Domain;
 
@@ -5,11 +6,56 @@ namespace SafiStore.Api.Data
 {
     public static class DbSeeder
     {
-        public static async Task SeedAsync(AppDbContext context, ILogger logger)
+        public static async Task SeedAsync(
+            AppDbContext context,
+            UserManager<ApplicationUser> userManager,
+            RoleManager<IdentityRole<int>> roleManager,
+            ILogger logger)
         {
+            // Ensure roles exist
+            foreach (var role in new[] { "Admin", "Customer", "Vendor" })
+            {
+                if (!await roleManager.RoleExistsAsync(role))
+                    await roleManager.CreateAsync(new IdentityRole<int>(role));
+            }
+
+            // Seed default admin if no users exist
+            if (!await context.Users.AnyAsync())
+            {
+                logger.LogInformation("Seeding default admin account...");
+                var adminEmail = "admin@safistore.com";
+                var adminUser = await userManager.FindByEmailAsync(adminEmail);
+                if (adminUser == null)
+                {
+                    adminUser = new ApplicationUser
+                    {
+                        UserName = adminEmail,
+                        Email = adminEmail,
+                        FirstName = "Super",
+                        LastName = "Admin",
+                        Role = "Admin",
+                        EmailConfirmed = true,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    var result = await userManager.CreateAsync(adminUser, "Admin@123");
+                    if (result.Succeeded)
+                    {
+                        await userManager.AddToRoleAsync(adminUser, "Admin");
+                        logger.LogInformation("Default admin created: admin@safistore.com / Admin@123");
+                    }
+                    else
+                    {
+                        logger.LogWarning("Failed to seed admin: {Errors}",
+                            string.Join(", ", result.Errors.Select(e => e.Description)));
+                    }
+                }
+            }
+
             if (await context.Categories.AnyAsync())
             {
-                logger.LogInformation("Database already seeded.");
+                logger.LogInformation("Database already seeded with categories.");
                 return;
             }
 

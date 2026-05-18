@@ -4,9 +4,6 @@ using SafiStore.Api.Data;
 
 namespace SafiStore.Api.Infrastructure.Services
 {
-    /// <summary>
-    /// Manages user-level admin operations: list all users, delete a user.
-    /// </summary>
     public class UserService : IUserService
     {
         private readonly AppDbContext _context;
@@ -16,7 +13,6 @@ namespace SafiStore.Api.Infrastructure.Services
             _context = context;
         }
 
-        /// <summary>Returns all registered users as lightweight projections.</summary>
         public async Task<(List<UserDto> Users, int Total)> GetAllUsersAsync(int page = 1, int pageSize = 20)
         {
             var query = _context.Users.AsNoTracking();
@@ -41,12 +37,34 @@ namespace SafiStore.Api.Infrastructure.Services
             return (users, total);
         }
 
-        /// <summary>Deletes a user by ID. Throws ArgumentException if not found.</summary>
         public async Task DeleteUserAsync(int userId)
         {
             var user = await _context.Users.FindAsync(userId);
             if (user == null)
                 throw new ArgumentException($"User {userId} not found.");
+
+            // Check for existing orders
+            var hasOrders = await _context.Orders.AnyAsync(o => o.UserId == userId);
+            if (hasOrders)
+                throw new InvalidOperationException(
+                    $"Cannot delete user {userId}: user has existing orders. " +
+                    "Please cancel all orders before deleting the user.");
+
+            // Check for existing reviews
+            var hasReviews = await _context.Reviews.AnyAsync(r => r.UserId == userId);
+            if (hasReviews)
+                throw new InvalidOperationException(
+                    $"Cannot delete user {userId}: user has existing reviews. " +
+                    "Please remove all reviews before deleting the user.");
+
+            // Check for cart items
+            var cartItems = await _context.CartItems
+                .Where(ci => ci.Cart!.UserId == userId)
+                .ToListAsync();
+            if (cartItems.Count != 0)
+            {
+                _context.CartItems.RemoveRange(cartItems);
+            }
 
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
