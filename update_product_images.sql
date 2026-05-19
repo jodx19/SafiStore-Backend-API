@@ -240,8 +240,8 @@ WHERE Title LIKE '%Philips Hue%';
 -- VERIFICATION
 -- ============================================================
 
-SELECT '=== PRODUCTS WITH IMAGES ===' AS '';
+SELECT '=== PRODUCTS WITH IMAGES ===' AS [Label];
 SELECT Id, Title, ImageUrl FROM dbo.Products ORDER BY Id;
 
-SELECT '=== PRODUCTS WITHOUT IMAGES ===' AS '';
+SELECT '=== PRODUCTS WITHOUT IMAGES ===' AS [Label];
 SELECT Id, Title FROM dbo.Products WHERE ImageUrl IS NULL OR ImageUrl = '' ORDER BY Id;
